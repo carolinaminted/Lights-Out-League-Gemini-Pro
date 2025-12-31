@@ -1,0 +1,106 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Base Styles */
+body {
+  font-family: 'Exo 2', sans-serif;
+  /* Prevent elastic scrolling/bouncing on iOS for a native app feel */
+  overscroll-behavior-y: none;
+}
+
+/* Animations that aren't native to Tailwind config or legacy support */
+@keyframes pulse-red {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.5);
+    opacity: 0.7;
+  }
+}
+
+.animate-pulse-red {
+  animation: pulse-red 1.5s infinite;
+}
+
+.animate-pulse-red-limited {
+  animation: pulse-red 1.5s 3;
+}
+
+.option-card { line-height: 1.2; }
+.option-label { text-wrap: balance; }
+
+/* Safe Area Utilities for Mobile */
+.pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+.mb-safe { margin-bottom: env(safe-area-inset-bottom); }
+.pt-safe { padding-top: env(safe-area-inset-top); }
+
+/* Hide scrollbar for cleaner UI in specific containers */
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+.no-scrollbar {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+}
+
+/* Custom Scrollbar for desktop/admin areas */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+/* Carbon Fiber Pattern Class */
+.bg-carbon-fiber {
+  background-color: #111;
+  background-image: 
+    linear-gradient(45deg, #1a1a1a 25%, transparent 25%, transparent 75%, #1a1a1a 75%, #1a1a1a),
+    linear-gradient(45deg, #1a1a1a 25%, transparent 25%, transparent 75%, #1a1a1a 75%, #1a1a1a);
+  background-position: 0 0, 10px 10px;
+  background-size: 20px 20px;
+}
+
+/* Traditional Checkered Flag Pattern Class */
+.bg-checkered-flag {
+  background-color: #e0e0e0;
+  background-image:
+    linear-gradient(45deg, #050505 25%, transparent 25%, transparent 75%, #050505 75%, #050505),
+    linear-gradient(45deg, #050505 25%, transparent 25%, transparent 75%, #050505 75%, #050505);
+  background-position: 0 0, 40px 40px;
+  background-size: 80px 80px;
+}
+
+/* Glassy Sheen Sweep */
+.sheen-sweep {
+  position: relative;
+  overflow: hidden;
+}
+.sheen-sweep::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(to right, transparent 0%, rgba(255,255,255,0.1) 50%, transparent 100%);
+  transform: skewX(-25deg);
+  transition: left 0.5s;
+  pointer-events: none;
+  z-index: 20;
+}
+.sheen-sweep:hover::after, .sheen-sweep.animate-flare::after {
+  left: 200%;
+  transition: left 1s ease-in-out;
+}

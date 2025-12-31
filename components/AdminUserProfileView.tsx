@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import { User, PickSelection, RaceResults, PointsSystem, Driver, Constructor, Event } from '../types.ts';
-import { getUserPicks, updateUserAdminStatus, updateUserDuesStatus, updatePickPenalty } from '../services/firestoreService.ts';
+import { getUserPicks, updateUserAdminStatus, updateUserDuesStatus, updatePickPenalty, saveUserPicks } from '../services/firestoreService.ts';
 import ProfilePage from './ProfilePage.tsx';
 import { AdminIcon } from './icons/AdminIcon.tsx';
 import { DuesIcon } from './icons/DuesIcon.tsx';
@@ -105,10 +104,12 @@ const AdminUserProfileView: React.FC<AdminUserProfileViewProps> = ({ targetUser,
         <div>
             {/* Admin Management Panel */}
             <div className="bg-carbon-fiber border border-pure-white/10 rounded-xl p-6 mb-6 space-y-6 shadow-xl">
-                <h3 className="font-bold text-pure-white text-xl border-b border-pure-white/10 pb-4 flex items-center gap-2">
-                    <AdminIcon className="w-6 h-6 text-primary-red" />
-                    Account Management
-                </h3>
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-pure-white/10 pb-4 mb-4 gap-4">
+                    <h3 className="font-bold text-pure-white text-xl flex items-center gap-2">
+                        <AdminIcon className="w-6 h-6 text-primary-red" />
+                        Account Management
+                    </h3>
+                </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* Admin Toggle */}

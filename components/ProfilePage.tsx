@@ -88,13 +88,15 @@ const PenaltyManager: React.FC<{
     currentReason?: string;
     onSave: (eventId: string, penalty: number, reason: string) => Promise<void>; 
 }> = ({ eventId, currentPenalty, currentReason, onSave }) => {
-    const [penaltyPercent, setPenaltyPercent] = useState(currentPenalty * 100);
+    // State to hold the percentage value (0-100) or empty string for typing
+    const [penaltyPercent, setPenaltyPercent] = useState<number | ''>(Math.round((currentPenalty || 0) * 100));
     const [reason, setReason] = useState(currentReason || '');
     const [isSaving, setIsSaving] = useState(false);
 
     const handleSave = async () => {
         setIsSaving(true);
-        await onSave(eventId, penaltyPercent / 100, reason);
+        const val = Number(penaltyPercent) || 0;
+        await onSave(eventId, val / 100, reason);
         setIsSaving(false);
     };
 
@@ -103,19 +105,40 @@ const PenaltyManager: React.FC<{
             <h4 className="flex items-center gap-2 text-sm font-bold text-primary-red uppercase mb-3">
                 <AdminIcon className="w-4 h-4" /> Admin Penalty Tribunal
             </h4>
-            <div className="space-y-3">
+            <div className="space-y-4">
                 <div>
-                    <label className="block text-xs font-bold text-highlight-silver mb-1">Penalty Deduction (%)</label>
+                    <label className="block text-xs font-bold text-highlight-silver mb-2">Penalty Deduction (%)</label>
                     <div className="flex items-center gap-3">
                         <input 
                             type="range" 
                             min="0" 
                             max="100" 
-                            value={penaltyPercent}
-                            onChange={(e) => setPenaltyPercent(Number(e.target.value))}
-                            className="flex-1 accent-primary-red"
+                            step="1"
+                            value={Number(penaltyPercent) || 0}
+                            onChange={(e) => setPenaltyPercent(parseInt(e.target.value))}
+                            className="flex-1 h-2 bg-carbon-black rounded-lg appearance-none cursor-pointer accent-primary-red focus:outline-none focus:ring-1 focus:ring-primary-red/50"
                         />
-                        <span className="font-mono font-bold text-pure-white w-12 text-right">{penaltyPercent}%</span>
+                        <div className="relative w-20 flex-shrink-0">
+                            <input 
+                                type="number" 
+                                min="0" 
+                                max="100" 
+                                value={penaltyPercent}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === '') {
+                                        setPenaltyPercent('');
+                                    } else {
+                                        const num = parseInt(val);
+                                        if (!isNaN(num) && num >= 0 && num <= 100) {
+                                            setPenaltyPercent(num);
+                                        }
+                                    }
+                                }}
+                                className="w-full bg-carbon-black border border-accent-gray rounded-md px-2 py-1.5 text-right text-pure-white font-mono font-bold text-sm focus:border-primary-red focus:outline-none pr-6"
+                            />
+                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-highlight-silver text-xs font-bold pointer-events-none">%</span>
+                        </div>
                     </div>
                 </div>
                 <div>
@@ -125,7 +148,7 @@ const PenaltyManager: React.FC<{
                         value={reason} 
                         onChange={(e) => setReason(e.target.value)}
                         placeholder="e.g. Late Submission"
-                        className="w-full bg-carbon-black border border-accent-gray rounded px-2 py-1 text-sm text-pure-white"
+                        className="w-full bg-carbon-black border border-accent-gray rounded px-3 py-2 text-sm text-pure-white focus:outline-none focus:border-primary-red"
                     />
                 </div>
                 <button 
