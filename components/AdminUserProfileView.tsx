@@ -1,0 +1,217 @@
+
+import React, { useState, useEffect } from 'react';
+import { User, PickSelection, RaceResults, PointsSystem, Driver, Constructor, Event } from '../types.ts';
+import { getUserPicks, updateUserAdminStatus, updateUserDuesStatus, updatePickPenalty } from '../services/firestoreService.ts';
+import ProfilePage from './ProfilePage.tsx';
+import { AdminIcon } from './icons/AdminIcon.tsx';
+import { DuesIcon } from './icons/DuesIcon.tsx';
+import { ProfileSkeleton } from './LoadingSkeleton.tsx';
+import { useToast } from '../contexts/ToastContext.tsx';
+
+interface AdminUserProfileViewProps {
+    targetUser: User;
+    raceResults: RaceResults;
+    pointsSystem: PointsSystem;
+    onUpdateUser: (updatedUser: User) => void;
+    allDrivers: Driver[];
+    allConstructors: Constructor[];
+    events: Event[];
+}
+
+const AdminUserProfileView: React.FC<AdminUserProfileViewProps> = ({ targetUser, raceResults, pointsSystem, onUpdateUser, allDrivers, allConstructors, events }) => {
+    const [seasonPicks, setSeasonPicks] = useState<{ [eventId: string]: PickSelection }>({});
+    const [isLoading, setIsLoading] = useState(true);
+    
+    // States for toggles
+    const [isAdminState, setIsAdminState] = useState(false);
+    const [isDuesPaidState, setIsDuesPaidState] = useState(false);
+    
+    // Saving states
+    const [isSavingAdmin, setIsSavingAdmin] = useState(false);
+    const [isSavingDues, setIsSavingDues] = useState(false);
+
+    const { showToast } = useToast();
+
+    useEffect(() => {
+        const fetchPicks = async () => {
+            setIsLoading(true);
+            const picks = await getUserPicks(targetUser.id);
+            setSeasonPicks(picks || {});
+            
+            // Initialize toggle states based on user object
+            setIsAdminState(!!targetUser.isAdmin);
+            setIsDuesPaidState(targetUser.duesPaidStatus === 'Paid');
+            
+            setIsLoading(false);
+        };
+        fetchPicks();
+    }, [targetUser.id, targetUser.isAdmin, targetUser.duesPaidStatus]);
+
+    const handleSaveAdminStatus = async () => {
+        setIsSavingAdmin(true);
+        try {
+            await updateUserAdminStatus(targetUser.id, isAdminState);
+            onUpdateUser({ ...targetUser, isAdmin: isAdminState });
+            showToast(`Successfully ${isAdminState ? 'granted' : 'revoked'} admin privileges for ${targetUser.displayName}.`, 'success');
+        } catch (error) {
+            console.error("Failed to update admin status", error);
+            showToast("Failed to update admin status. Please try again.", 'error');
+            setIsAdminState(!!targetUser.isAdmin); // Revert
+        } finally {
+            setIsSavingAdmin(false);
+        }
+    };
+
+    const handleSaveDuesStatus = async () => {
+        setIsSavingDues(true);
+        const newStatus = isDuesPaidState ? 'Paid' : 'Unpaid';
+        try {
+            await updateUserDuesStatus(targetUser.id, newStatus);
+            onUpdateUser({ ...targetUser, duesPaidStatus: newStatus });
+            showToast(`Successfully updated dues status to ${newStatus} for ${targetUser.displayName}.`, 'success');
+        } catch (error) {
+            console.error("Failed to update dues status", error);
+            showToast("Failed to update dues status. Please try again.", 'error');
+            setIsDuesPaidState(targetUser.duesPaidStatus === 'Paid'); // Revert
+        } finally {
+            setIsSavingDues(false);
+        }
+    };
+
+    const handlePenaltyUpdate = async (eventId: string, penalty: number, reason: string) => {
+        try {
+            await updatePickPenalty(targetUser.id, eventId, penalty, reason);
+            // Update local state to reflect change immediately in the UI
+            setSeasonPicks(prev => ({
+                ...prev,
+                [eventId]: {
+                    ...prev[eventId],
+                    penalty,
+                    penaltyReason: reason
+                }
+            }));
+            showToast("Penalty applied successfully.", 'success');
+        } catch (error) {
+            console.error("Failed to update penalty", error);
+            showToast("Failed to apply penalty. Please try again.", 'error');
+        }
+    };
+
+    if (isLoading) {
+        return <ProfileSkeleton />;
+    }
+
+    return (
+        <div>
+            {/* Admin Management Panel */}
+            <div className="bg-carbon-fiber border border-pure-white/10 rounded-xl p-6 mb-6 space-y-6 shadow-xl">
+                <h3 className="font-bold text-pure-white text-xl border-b border-pure-white/10 pb-4 flex items-center gap-2">
+                    <AdminIcon className="w-6 h-6 text-primary-red" />
+                    Account Management
+                </h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Admin Toggle */}
+                    <div className="flex flex-col gap-3 p-4 bg-carbon-black/40 rounded-xl border border-pure-white/5 hover:border-pure-white/10 transition-colors">
+                        <div className="flex items-center gap-3">
+                            <div className="bg-primary-red/10 p-2 rounded-lg">
+                                <AdminIcon className="w-6 h-6 text-primary-red" />
+                            </div>
+                            <div>
+                                <h4 className="font-bold text-pure-white">Admin Privileges</h4>
+                                <p className="text-xs text-highlight-silver">Access level</p>
+                            </div>
+                        </div>
+                        
+                        <div className="flex items-center justify-between mt-2 pt-2 border-t border-pure-white/5">
+                            <label className="flex items-center cursor-pointer select-none group">
+                                <div className="relative">
+                                    <input 
+                                        type="checkbox" 
+                                        className="sr-only" 
+                                        checked={isAdminState} 
+                                        onChange={(e) => setIsAdminState(e.target.checked)}
+                                    />
+                                    <div className={`block w-12 h-7 rounded-full transition-colors ${isAdminState ? 'bg-primary-red' : 'bg-carbon-black border border-highlight-silver group-hover:border-pure-white'}`}></div>
+                                    <div className={`dot absolute left-1 top-1 bg-white w-5 h-5 rounded-full transition-transform ${isAdminState ? 'transform translate-x-5' : ''}`}></div>
+                                </div>
+                                <div className="ml-3 font-medium text-sm text-pure-white">
+                                    {isAdminState ? 'Admin' : 'User'}
+                                </div>
+                            </label>
+
+                            {(isAdminState !== !!targetUser.isAdmin) && (
+                                <button 
+                                    onClick={handleSaveAdminStatus}
+                                    disabled={isSavingAdmin}
+                                    className="bg-primary-red hover:bg-red-600 text-pure-white font-bold py-1.5 px-4 rounded-lg text-xs disabled:opacity-50 transition-colors shadow-lg shadow-primary-red/20"
+                                >
+                                    {isSavingAdmin ? 'Saving...' : 'Save Changes'}
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Dues Toggle */}
+                    <div className="flex flex-col gap-3 p-4 bg-carbon-black/40 rounded-xl border border-pure-white/5 hover:border-pure-white/10 transition-colors">
+                        <div className="flex items-center gap-3">
+                            <div className="bg-green-600/10 p-2 rounded-lg">
+                                <DuesIcon className="w-6 h-6 text-green-500" />
+                            </div>
+                            <div>
+                                <h4 className="font-bold text-pure-white">League Dues</h4>
+                                <p className="text-xs text-highlight-silver">Payment status</p>
+                            </div>
+                        </div>
+                        
+                        <div className="flex items-center justify-between mt-2 pt-2 border-t border-pure-white/5">
+                            <label className="flex items-center cursor-pointer select-none group">
+                                <div className="relative">
+                                    <input 
+                                        type="checkbox" 
+                                        className="sr-only" 
+                                        checked={isDuesPaidState} 
+                                        onChange={(e) => setIsDuesPaidState(e.target.checked)}
+                                    />
+                                    <div className={`block w-12 h-7 rounded-full transition-colors ${isDuesPaidState ? 'bg-green-600' : 'bg-carbon-black border border-highlight-silver group-hover:border-pure-white'}`}></div>
+                                    <div className={`dot absolute left-1 top-1 bg-white w-5 h-5 rounded-full transition-transform ${isDuesPaidState ? 'transform translate-x-5' : ''}`}></div>
+                                </div>
+                                <div className="ml-3 font-medium text-sm text-pure-white">
+                                    {isDuesPaidState ? 'Paid' : 'Unpaid'}
+                                </div>
+                            </label>
+
+                             {((isDuesPaidState ? 'Paid' : 'Unpaid') !== (targetUser.duesPaidStatus || 'Unpaid')) && (
+                                <button 
+                                    onClick={handleSaveDuesStatus}
+                                    disabled={isSavingDues}
+                                    className="bg-green-600 hover:bg-green-500 text-pure-white font-bold py-1.5 px-4 rounded-lg text-xs disabled:opacity-50 transition-colors shadow-lg shadow-green-600/20"
+                                >
+                                    {isSavingDues ? 'Saving...' : 'Save Changes'}
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div className="bg-accent-gray/30 p-3 rounded-lg text-center ring-1 ring-pure-white/10 mb-6 border border-pure-white/5">
+                <p className="font-bold text-ghost-white text-sm">Impersonation View · <span className="text-highlight-silver font-normal">You are viewing this profile as an administrator.</span></p>
+            </div>
+            
+            {/* Pass the penalty update callback to enable admin controls inside ProfilePage */}
+            <ProfilePage 
+                user={targetUser} 
+                seasonPicks={seasonPicks} 
+                raceResults={raceResults} 
+                pointsSystem={pointsSystem}
+                allDrivers={allDrivers}
+                allConstructors={allConstructors}
+                onUpdatePenalty={handlePenaltyUpdate}
+                events={events}
+            />
+        </div>
+    );
+};
+
+export default AdminUserProfileView;

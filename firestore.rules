@@ -1,0 +1,124 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // --- Helper Functions ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true
+      );
+    }
+
+    function isValidUserUpdate(data) {
+      // Allow updates if:
+      // 1. Strings are within limits
+      // 2. Types are correct
+      return (
+        (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 20)) &&
+        (!('firstName' in data) || (data.firstName is string && data.firstName.size() <= 50)) &&
+        (!('lastName' in data) || (data.lastName is string && data.lastName.size() <= 50)) &&
+        (!('email' in data) || (data.email is string))
+      );
+    }
+
+    // --- User Profiles (Private PII) ---
+    match /users/{userId} {
+      // CRITICAL: Only owner or admin can read full profile (email, dues status)
+      allow read: if isOwner(userId) || isAdmin();
+      
+      // Creation validation
+      allow create: if isOwner(userId) 
+                    && isValidUserUpdate(request.resource.data);
+
+      // An update is allowed if:
+      // 1. The user is the owner AND they are NOT trying to change their dues status or admin status.
+      // 2. The data is valid (lengths/types).
+      // 3. The requester is an admin (can change anything).
+      allow update: if (isOwner(userId) 
+                        && !request.resource.data.diff(resource.data).changedKeys().hasAny(['duesPaidStatus', 'isAdmin'])
+                        && isValidUserUpdate(request.resource.data)
+                       ) || isAdmin();
+    }
+
+    // --- Public User Profiles (Safe for Leaderboard) ---
+    match /public_users/{userId} {
+      // Anyone can read the leaderboard names
+      allow read: if true;
+      
+      // Schema Validation: STRICT MODE
+      // Enforces allowed keys whitelist, types, and string length limits.
+      function isValidPublicSchema(data) {
+        let allowedKeys = ['displayName', 'photoURL', 'totalPoints', 'rank', 'breakdown', 'lastUpdated'];
+        
+        // 1. Reject Unknown Fields
+        let hasOnlyAllowed = data.keys().hasOnly(allowedKeys);
+        
+        // 2. Type & Value Checks
+        let validName = !('displayName' in data) || (data.displayName is string && data.displayName.size() <= 20);
+        let validPhoto = !('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 500);
+        let validPoints = !('totalPoints' in data) || (data.totalPoints is number);
+        let validRank = !('rank' in data) || (data.rank is number);
+        let validBreakdown = !('breakdown' in data) || (data.breakdown is map);
+        let validTimestamp = !('lastUpdated' in data) || (data.lastUpdated is timestamp);
+
+        return hasOnlyAllowed && validName && validPhoto && validPoints && validRank && validBreakdown && validTimestamp;
+      }
+
+      // System Integrity Check
+      // Users should only be able to update 'displayName' or 'photoURL'.
+      // System fields (points, rank, breakdown) must NOT be touched by client-side user writes.
+      function isUserTouchingSystemFields() {
+         return (resource != null && request.resource.data.diff(resource.data).changedKeys().hasAny(['totalPoints', 'rank', 'breakdown', 'lastUpdated']))
+             || (resource == null && request.resource.data.keys().hasAny(['totalPoints', 'rank', 'breakdown', 'lastUpdated']));
+      }
+      
+      // Only owner or admin can update the public profile
+      allow write: if (isOwner(userId) || isAdmin())
+                   && isValidPublicSchema(request.resource.data)
+                   && (isAdmin() || !isUserTouchingSystemFields());
+    }
+    
+    // --- User Picks ---
+    match /userPicks/{userId} {
+       allow read: if true;
+       // Allow owner to submit picks OR Admin to apply penalties/edits
+       allow write: if isOwner(userId) || isAdmin();
+    }
+
+    // --- Global App State ---
+    match /app_state/{document=**} {
+       allow read: if isSignedIn();
+       allow write: if isAdmin();
+    }
+    
+    // --- Dues Payments ---
+    match /dues_payments/{paymentId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // --- Invitation Codes ---
+    match /invitation_codes/{code} {
+      // Admins can do anything
+      allow read, write: if isAdmin();
+      
+      // Users should NOT be able to read the list directly (Cloud Function handles validation).
+      // However, during signup (profile creation), the user needs to update the invitation doc 
+      // to mark it as 'used'.
+      // Condition: User is signed in, updating 'status' to 'used', and claiming it.
+      allow update: if isSignedIn() 
+                    && request.resource.data.status == 'used'
+                    && request.resource.data.usedBy == request.auth.uid;
+    }
+  }
+}
